@@ -1,6 +1,5 @@
 #pragma once
-#include <iostream>
-#include <string>
+#include "Prerequisites.h"
 
 class
 	CesarEncryption {
