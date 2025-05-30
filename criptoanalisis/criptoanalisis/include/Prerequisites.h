@@ -7,3 +7,4 @@
 #include <iomanip>
 #include <cctype>
 #include <algorithm>
+#include <bitset>
