@@ -77,7 +77,6 @@ public:
 		return permuted;
   }
 
-
   std::bitset<64> 
   fPermutation(const std::bitset<64>& input) {
     std::bitset<64> output;
@@ -86,7 +85,6 @@ public:
     }
     return output;
   }
-
 
   std::bitset<64> encode(const std::bitset<64>& plaintext) {
 		auto data = iPermutation(plaintext);
@@ -103,6 +101,39 @@ public:
 		return fPermutation(std::bitset<64>(combined));
   }
 
+  std::bitset<64> decode(const std::bitset<64>& plaintext) {
+    auto data = iPermutation(plaintext);
+    std::bitset<32> left(data.to_ullong() >> 32);
+    std::bitset<32> right(data.to_ullong());
+
+    for (int round = 15; round >= 0; --round) {
+      auto newRight = left ^ feistel(right, subkeys[round]);
+      left = right;
+      right = newRight;
+    }
+
+    uint64_t combined = (static_cast<uint64_t>(right.to_ullong()) << 32) | left.to_ullong();
+    return fPermutation(std::bitset<64>(combined));
+  }
+
+  std::bitset<64> stringToBitset64(const std::string& block) {
+    uint64_t bits = 0;
+    for (int i = 0; i < block.size(); i++) {
+      bits |= (uint64_t)(unsigned char)block[i] << ((7 - i) * 8);
+    }
+		return std::bitset<64>(bits);
+  }
+
+  std::string bitset64ToString(const std::bitset<64>& bits) {
+    std::string result(8, '\0');
+    uint64_t val = bits.to_ullong();
+
+    for (int i = 0; i < 8; i++) {
+      result[7 - i] = (val >> (i * 8)) & 0xFF;
+    }
+
+		return result;
+  }
 
 private:
   std::bitset<64> key;
