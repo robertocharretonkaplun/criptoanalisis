@@ -138,6 +138,7 @@
     <ClInclude Include="include\CesarEncryption.h" />
     <ClInclude Include="include\DES.h" />
     <ClInclude Include="include\Prerequisites.h" />
+    <ClInclude Include="include\Vigenere.h" />
     <ClInclude Include="include\XOREncoder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
