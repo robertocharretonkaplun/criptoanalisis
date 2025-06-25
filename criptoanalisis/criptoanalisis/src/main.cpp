@@ -1,20 +1,14 @@
 #include "Prerequisites.h"
-#include "Vigenere.h"
+#include "CryptoGenerator.h"
 
 int main() {
-	std::string text = "Hola este mensaje otorga una decima";
-	std::string key = "RobertoCharreton00";
+	// 1) Generar una contraseña de 16 caracteres (mayúsculas, minúsculas, dígitos)
+	CryptoGenerator cryptoGen;
+	cryptoGen.generatePassword(16); // Generate a password of length 16
 
-	std::cout << "Texto original: " << text << std::endl;
-	std::cout << "Clave: " << key << std::endl;
-
-	Vigenere vigenere(key);
-	std::string encrypted = vigenere.encode(text);
-	std::cout << "Texto cifrado: " << encrypted << std::endl;
-
-	std::string decrypted = vigenere.decode(encrypted);
-	std::cout << "Texto descifrado: " << decrypted << std::endl;
-
-
+	// 2) Generar 16 bytes aleatorios genéricos
+	auto randomBytes = cryptoGen.generateBytes(16);
+	//std::cout << "Random Bytes (hex): " << cryptoGen.toHex(randomBytes) << std::endl;
 	return 0;
 }
+

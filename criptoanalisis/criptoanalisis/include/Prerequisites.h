@@ -8,3 +8,6 @@
 #include <cctype>
 #include <algorithm>
 #include <bitset>
+#include <functional> 
+#include <stdexcept>
+#include <random>

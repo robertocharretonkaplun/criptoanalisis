@@ -1,8 +1,8 @@
 #pragma once
 #include "Prerequisites.h"
 
-class 
-Vigenere {
+class
+	Vigenere {
 public:
 	Vigenere() = default;
 
@@ -12,11 +12,11 @@ public:
 		}
 	}
 
-	static std::string 
-	normalizeKey(const std::string& rawKey) {
+	static std::string
+		normalizeKey(const std::string& rawKey) {
 		std::string k;
 		for (char c : rawKey) {
-			if(std::isalpha(static_cast<unsigned char>(c))) {
+			if (std::isalpha(static_cast<unsigned char>(c))) {
 				k += std::toupper(static_cast<unsigned char>(c)); // Convert to uppercase and append
 			}
 		}
@@ -73,6 +73,93 @@ public:
 		return result; // Return the encoded string
 	}
 
+	static double fitness(const std::string& text) {
+		static const std::vector<std::string> comunes = {
+		" DE ", " LA ", " EL ", " QUE ", " Y ",
+		" A ", " EN ", " UN ", " PARA ", " CON ",
+		" POR ", " COMO ", " SU ", " AL ", " DEL ",
+		" LOS ", " SE ", " NO ", " MAS ", " O ",
+		" SI ", " YA ", " TODO ", " ESTA ", " HAY ",
+		" ESTO ", " SON ", " TIENE ", " HACE ", " SUS ",
+		" VIDA ", " NOS ", " TE ", " LO ", " ME ",
+		" ESTE ", " ESA ", " ESE ", " BIEN ", " MUY ",
+		" PUEDE ", " TAMBIEN ", " AUN ", " MI ", " DOS ",
+		" UNO ", " OTRO ", " NUEVO ", " SIN ", " ENTRE ",
+		" SOBRE "
+		};
+
+		double score = 0;
+		for (auto& w : comunes) {
+			size_t pos = 0;
+			while ((pos = text.find(w, pos)) != std::string::npos) {
+				score += w.length();
+				pos += w.length();
+			}
+		}
+		return score;
+
+	}
+
+	static std::string breakEncode(const std::string& text, int maxKeyLenght) {
+		std::string bestKey;
+		std::string bestText;
+		std::string trailKey;
+
+		double bestScore = -std::numeric_limits<double>::infinity(); // Initialize best score
+
+		// Funcion revursiva para generar todas las posibles claves de longitud
+		std::function<void(int, int)> dfs = [&](int pos, int maxLen) {
+			if (pos == maxLen) {
+				Vigenere v(trailKey);
+				std::string decodedText = v.decode(text);
+				double score = fitness(decodedText); // Score the decoded text
+				if (score > bestScore) {
+					bestScore = score;
+					bestKey = trailKey;
+					bestText = decodedText;
+				}
+				return;
+			}
+			for (char c = 'A'; c <= 'Z'; ++c) {
+				trailKey[pos] = c;
+				dfs(pos + 1, maxLen);
+			}
+		};
+
+		for (int L = 1; L <= maxKeyLenght; ++L) {
+			trailKey.assign(L, 'A');
+			dfs(0, L);
+		}
+
+		std::cout << "*** Fuerza Bruta Vigenère ***\n";
+		std::cout << "Clave encontrada:  " << bestKey << "\n";
+		std::cout << "Texto descifrado:  " << bestText << "\n\n";
+		return bestKey;
+	}
+
 private:
 	std::string key; // The key for the Vigenere cipher
 };
+/*
+#include "Prerequisites.h"
+#include "Vigenere.h"
+
+int main() {
+	std::string text = "Hola este mensaje otorga una decima";
+	std::string key = "RobertoCharreton00";
+
+	std::cout << "Texto original: " << text << std::endl;
+	std::cout << "Clave: " << key << std::endl;
+
+	Vigenere vigenere(key);
+	std::string encrypted = vigenere.encode(text);
+	std::cout << "Texto cifrado: " << encrypted << std::endl;
+
+	std::string decrypted = vigenere.decode(encrypted);
+	std::cout << "Texto descifrado: " << decrypted << std::endl;
+
+
+	return 0;
+}
+
+*/
