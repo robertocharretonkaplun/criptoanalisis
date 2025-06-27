@@ -81,6 +81,122 @@ public:
 		return bytes;  // Devuelve el vector de bytes generados.
 	}
 
+	// Convierte bytes a cadena hexadecimal
+	std::string 
+	toHex(const std::vector<uint8_t>& data) {
+		std::ostringstream oss;
+
+		for (const auto& byte : data) {
+			oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+		}
+		return oss.str();  // Convierte el vector de bytes a una cadena hexadecimal.
+	}
+
+	// Decodifica una cadena hexadecimal a bytes
+	std::vector<uint8_t> 
+	fromHex(const std::string& hex) {
+		if (hex.size() % 2 != 0)
+			throw std::runtime_error("Hex inválido (longitud impar).");
+		
+		std::vector<uint8_t> data(hex.size() / 2);
+		for (size_t i = 0; i < data.size(); ++i) {
+			unsigned int byte;
+			std::istringstream(hex.substr(2 * i, 2)) >> std::hex >> byte;
+			data[i] = static_cast<uint8_t>(byte);
+		}
+		return data;
+	}
+
+	/**
+	 * @brief Genera una clave simétrica de tamaño dado en bits.
+	 *
+	 * @param bits Tamaño de la clave en bits (debe ser múltiplo de 8).
+	 * @return std::vector<uint8_t> Clave generada (bits/8 bytes).
+	 * @throws std::runtime_error Si bits no es múltiplo de 8.
+	 */
+	std::vector<uint8_t> 
+	generateKey(unsigned int bits) {
+		if (bits % 8 != 0) {
+			throw std::runtime_error("Bits debe ser múltiplo de 8.");
+		}
+		return generateBytes(bits / 8);
+	}
+
+	/**
+		* @brief Genera un vector de inicialización (IV) de tamaño dado en bytes.
+		* Un IV es un valor aleatorio que se usa en modos de cifrado simétrico (CBC, CFB, GCM…)
+		* para garantizar que la misma clave cifre mensajes idénticos en salidas distintas
+		*
+		* @param blockSize Tamaño del IV en bytes.
+		* @return std::vector<uint8_t> IV generado.
+		*/
+	std::vector<uint8_t> 
+	generateIV(unsigned int blockSize) {
+		return generateBytes(blockSize);  // Genera un IV aleatorio del tamaño especificado.
+	}
+
+	/**
+	 * @brief Genera una salt criptográfica de longitud dada.
+	 * Una salt es un valor aleatorio que se combina con la contraseña al derivar una clave 
+	 * (por ejemplo, en PBKDF2, scrypt, Argon2) para evitar ataques de tabla arcoíris y asegurar 
+	 * que cada derivación sea única. Salt se usa para “espesar” la entropía de contraseñas 
+	 * al derivar claves
+	 *
+	 * @param length Longitud de la salt en bytes.
+	 * @return std::vector<uint8_t> Salt generada.
+	 */
+	std::vector<uint8_t> 
+	generateSalt(unsigned int length) {
+		return generateBytes(length);
+	}
+
+	/**
+		 * @brief Convierte un vector de bytes a una cadena Base64.
+		 *
+		 * @param data Vector de bytes de entrada.
+		 * @return std::string Representación Base64 (con relleno ‘=’ si aplica).
+		 */
+	std::string 
+		toBase64(const std::vector<uint8_t>& data) {
+		static const char* table =
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			"abcdefghijklmnopqrstuvwxyz"
+			"0123456789+/";
+		std::string b64;
+		unsigned int i = 0;
+
+		/**
+		 * Procesar bloques de 3 bytes.Tomamos 3 bytes y los concatenamos en un entero de 24 bits.
+		 * Ese entero lo dividimos en cuatro “seis bits” (24 ÷ 6 = 4).
+		 * Cada grupo de 6 bits (valor 0–63) se usa como índice en la table para obtener un carácter.
+		 */
+		while (i + 2 < data.size()) {
+			unsigned int block = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+			b64 += table[(block >> 18) & 0x3F];
+			b64 += table[(block >> 12) & 0x3F];
+			b64 += table[(block >> 6) & 0x3F];
+			b64 += table[(block) & 0x3F];
+			i += 3;
+		}
+
+		// Procesar los últimos 1 o 2 bytes restantes, añadiendo relleno '=' si es necesario.
+		if (i < data.size()) {
+			uint32_t block = data[i] << 16;
+			b64 += table[(block >> 18) & 0x3F];
+			if (i + 1 < data.size()) {
+				block |= data[i + 1] << 8;
+				b64 += table[(block >> 12) & 0x3F];
+				b64 += table[(block >> 6) & 0x3F];
+				b64 += '=';
+			}
+			else {
+				b64 += table[(block >> 12) & 0x3F];
+				b64 += "==";
+			}
+		}
+
+		return b64;  // Devuelve la cadena Base64 generada.
+	}
 
 private:
 	std::mt19937 m_engine;  ///< Motor de generación de números aleatorios Mersenne Twister.
