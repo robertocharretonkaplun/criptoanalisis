@@ -21,6 +21,19 @@ int main() {
 	// 5) Salt de 16 bytes
 	auto salt = cryptoGen.generateSalt(16);
 	std::cout << "Salt (Base64): " << cryptoGen.toBase64(salt) << "\n";
+
+	// 6) Safe release 
+	//cryptoGen.secureWipe(iv);
+	//cryptoGen.secureWipe(salt);
+
+	// 7) from Base64
+	std::string base64String = cryptoGen.toBase64(salt); // Example Base64 string
+	std::cout << "Base64: " << base64String << "\n";
+
+	auto fromBase64 = cryptoGen.fromBase64(base64String);
+	std::cout << "From Base64: " << cryptoGen.toHex(fromBase64) << "\n";
+
+
 	return 0;
 }
 

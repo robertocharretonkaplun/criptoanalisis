@@ -157,7 +157,7 @@ public:
 		 * @return std::string Representación Base64 (con relleno ‘=’ si aplica).
 		 */
 	std::string 
-		toBase64(const std::vector<uint8_t>& data) {
+	toBase64(const std::vector<uint8_t>& data) {
 		static const char* table =
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 			"abcdefghijklmnopqrstuvwxyz"
@@ -198,6 +198,86 @@ public:
 		return b64;  // Devuelve la cadena Base64 generada.
 	}
 
+	/**
+		 * @brief Decodifica una cadena Base64 estándar en bytes.
+		 *
+		 * @param b64 Cadena Base64.
+		 * @return std::vector<uint8_t> Bytes decodificados.
+		 * @throws std::runtime_error Si la cadena no es Base64 válida.
+		 */
+	std::vector<uint8_t> 
+	fromBase64(const std::string& b64) {
+		std::lock_guard<std::mutex> lock(_mtx);
+		std::vector<uint8_t> out;
+		size_t len = b64.size();
+		size_t pad = 0;
+
+		if (len >= 1 && b64[len - 1] == '=') pad++;
+		if (len >= 2 && b64[len - 2] == '=') pad++;
+		out.reserve(((len / 4) * 3) - pad);
+
+		unsigned int i = 0;
+		while (i < len) {
+			uint32_t block = 0;
+			unsigned int chars = 0;
+			for (unsigned int j = 0; j < 4 && i < len; ++j, ++i) {
+				uint8_t v = _decTable[(unsigned char)b64[i]];
+				if (v == 0xFF) { j--; continue; }
+				block = (block << 6) | v;  // Desplaza el bloque y agrega el valor del carácter.
+				chars++;
+			}
+			for (unsigned int k = 0; k < chars - 1; ++k) {
+				out.push_back((block >> (8 * (chars - 2 - k))) & 0xFF);
+			}
+		}
+		return out;  // Devuelve el vector de bytes decodificados.
+	}
+
+	/**
+	 * @brief Limpia de forma segura los datos sensibles en un vector.
+	 *
+	 * Sobrescribe cada byte con cero para evitar filtraciones en memoria.
+	 *
+	 * @param data Vector cuyos elementos serán limpiados.
+	 */
+	void 
+	secureWipe(std::vector<uint8_t>& data) {
+		std::fill(data.begin(), data.end(), 0);
+	}
+
+	/**
+	 * @brief Valida si una contraseña cumple con políticas mínimas.
+	 *
+	 * Requiere al menos una mayúscula, una minúscula, un dígito y longitud mínima de 8.
+	 *
+	 * @param password Contraseña a validar.
+	 * @return true si cumple la política; false en caso contrario.
+	 */
+	bool 
+	validatePassword(const std::string& password) {
+		if (password.size() < 8) return false;
+		bool hasUpper = false, hasLower = false, hasDigit = false, hasSymbols = false;
+		for (char c : password) {
+			if (std::isupper((unsigned char)c)) {
+				hasUpper = true;
+			}
+			else if (std::islower((unsigned char)c)) {
+				hasLower = true;
+			}
+			else if (std::isdigit((unsigned char)c)) {
+				hasDigit = true;
+			}
+			else if (std::ispunct((unsigned char)c)) {
+				hasSymbols = true;
+			}
+		}
+
+		return hasUpper && hasLower && hasDigit && hasSymbols;
+	}
+
 private:
 	std::mt19937 m_engine;  ///< Motor de generación de números aleatorios Mersenne Twister.
+	std::mutex _mtx;          ///< Mutex para uso thread-safe.
+	std::array<uint8_t, 256> _decTable;  ///< Tabla de decodificación Base64.
+
 };
