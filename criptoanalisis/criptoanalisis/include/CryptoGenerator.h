@@ -275,6 +275,79 @@ public:
 		return hasUpper && hasLower && hasDigit && hasSymbols;
 	}
 
+	/**
+		* @brief Estima la entropía aproximada (en bits) de una contraseña.
+		*        Basado en el tamaño del pool de caracteres usados y la longitud.
+		* @param password Contraseña a evaluar.
+		* @return Bits de entropía estimados.
+		*/
+	double 
+	estimateEntropy(const std::string& password) {
+		if (password.size() == 0) {
+			return 0.0;
+		}
+		bool hasUpper = false, hasLower = false, hasDigit = false, hasSymbols = false;
+		for (char c : password) {
+			if (std::isupper((unsigned char)c)) {
+				hasUpper = true;
+			}
+			else if (std::islower((unsigned char)c)) {
+				hasLower = true;
+			}
+			else if (std::isdigit((unsigned char)c)) {
+				hasDigit = true;
+			}
+			else if (std::ispunct((unsigned char)c)) {
+				hasSymbols = true;
+			}
+		}
+		unsigned int poolSize = 0;
+		if (hasLower) {
+			poolSize += 26;  // 26 letras minúsculas.
+		}
+		if (hasUpper) {
+			poolSize += 26;  // 26 letras mayúsculas.
+		}
+		if (hasDigit) {
+			poolSize += 10;  // 10 dígitos (0-9).
+		}
+		if (hasSymbols) {
+			poolSize += 32;  // Aproximadamente 32 símbolos comunes.
+		}
+		if (poolSize == 0) {
+			std::cout << "No character types enabled for entropy estimation." << std::endl;
+			return 0.0;  // Si no hay caracteres válidos, entropía es 0.
+		}
+		double entropy = password.size() * std::log2(static_cast<double>( poolSize));  // Entropía = log2(poolSize) * longitud.
+		return entropy;  // Devuelve la entropía estimada en bits.
+	}
+
+	/**
+		 * @brief Devuelve una calificación cualitativa de la fortaleza de la contraseña.
+		 * @param password Contraseña a calificar.
+		 * @return Una cadena: "Muy débil", "Débil", "Moderada", "Fuerte" o "Muy fuerte".
+		 */
+	std::string 
+	passwordStrength(const std::string& password) {
+		double entropy = estimateEntropy(password);
+		if (entropy < 28) {
+			return "Muy débil";  // Entropía < 28 bits.
+		}
+		else if (entropy < 40) {
+			return "Débil";  // Entropía entre 28 y 40 bits.
+		}
+		else if (entropy < 60) {
+			return "Moderada";  // Entropía entre 40 y 60 bits.
+		}
+		else if (entropy < 80) {
+			return "Fuerte";  // Entropía entre 60 y 80 bits.
+		}
+		else {
+			return "Muy fuerte";  // Entropía >= 80 bits.
+		}
+
+	}
+
 private:
 	std::mt19937 m_engine;  ///< Motor de generación de números aleatorios Mersenne Twister.
 	std::mutex _mtx;          ///< Mutex para uso thread-safe.

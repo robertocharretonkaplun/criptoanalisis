@@ -33,6 +33,15 @@ int main() {
 	auto fromBase64 = cryptoGen.fromBase64(base64String);
 	std::cout << "From Base64: " << cryptoGen.toHex(fromBase64) << "\n";
 
+	// 8) Estimated Entropy
+	std::string pwd = base64String;
+	auto entropy = cryptoGen.estimateEntropy(pwd);
+	std::cout << "Password 1: " << cryptoGen.generatePassword(16) << "\n";
+	std::cout << "Estimated Entropy 1: " << entropy << " | " << cryptoGen.passwordStrength(pwd) << "\n";
+	auto entropy2 = cryptoGen.estimateEntropy("JAlejandro_34087");
+	std::cout << "Password 2: " << "JAlejandro_34087" << "\n";
+	std::cout << "Estimated Entropy 2: " << entropy2 << " | " << cryptoGen.passwordStrength("JAlejandro_34087") << "\n";
+
 
 	return 0;
 }
