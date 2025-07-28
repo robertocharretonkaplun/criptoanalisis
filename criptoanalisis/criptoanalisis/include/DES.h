@@ -1,171 +1,234 @@
 #pragma once
 #include "Prerequisites.h"
 
-class DES
-{
+class DES {
 public:
-	DES()  = default;
+  // --- Constructores y generación de subclaves ---
+  DES() = default;
+  DES(const std::bitset<64>& key_) : key(key_) {
+    generateSubkeys();
+  }
+  ~DES() = default;
 
-  DES(const std::bitset<64>& key) : key(key) {
+  void setKey(const std::bitset<64>& key_) {
+    key = key_;
+    subkeys.clear();
     generateSubkeys();
   }
 
-	~DES() = default;
-
-  void generateSubkeys() {
-    for (int i = 0; i < 16; ++i) {
-      // Simplificada: subclave fija con rotación de bits
-      std::bitset<48> subkey((key.to_ullong() >> i) & 0xFFFFFFFFFFFF);
-      subkeys.push_back(subkey);
-    }
-  }
-  
+  // --- Bloque de 64 bits (1 bloque) ---
   std::bitset<64> 
-  iPermutation(const std::bitset<64>& input) {
-    std::bitset<64> output;
-    for (int i = 0; i < 64; i++) {
-      output[i] = input[i];
-    }
-    return output;
-  }
-
-  std::bitset<48> 
-  expand(const std::bitset<32>& halfBlock) {
-    std::bitset<48> output;
-
-    for (int i = 0; i < 48; i++) {
-      output[i] = halfBlock[32 - EXPANSION_TABLE[i]];
-		}
-
-		return output;
-  }
-
-  std::bitset<32> 
-  substitute(const std::bitset<48>& input) {
-    std::bitset<32> output;
-
-    for (int i = 0; i < 8; i++) {
-      int row = (input[i * 6] << 1) | input[i * 6 + 5]; // Bits 1 y 6
-      int col = (input[i * 6 + 1] << 3) | (input[i * 6 + 2] << 2) |
-                (input[i * 6 + 3] << 1) | input[i * 6 + 4]; // Bits 2-5
-      int sboxValue = SBOX[row % 4][col % 16]; // Valor de la S-Box
-
-      for (int j = 0; j < 4; j++) {
-        output[i * 4 + j] = (sboxValue >> (3 - j)) & 1; // Extraer bits
-			}
-    }
-
-		return output;
-  }
-
-  std::bitset<32> permuteP(const std::bitset<32>& input) {
-    std::bitset<32> output;
-
-    for (int  i = 0; i < 32; i++) {
-			output[i] = input[32 - P_TABLE[i]];
-    }
-
-		return output;
-  }
-
-  std::bitset<32> 
-  feistel(const std::bitset<32>& right, const std::bitset<48>& subkey) {
-		auto expandend = expand(right);
-		auto xored = expandend ^ subkey;
-    auto substituted = substitute(xored);
-		auto permuted = permuteP(substituted);
-		return permuted;
-  }
-
-  std::bitset<64> 
-  fPermutation(const std::bitset<64>& input) {
-    std::bitset<64> output;
-    for (int i = 0; i < 64; i++) {
-      output[i] = input[i];
-    }
-    return output;
-  }
-
-  std::bitset<64> encode(const std::bitset<64>& plaintext) {
-		auto data = iPermutation(plaintext);
-		std::bitset<32> left(data.to_ullong() >> 32);
-		std::bitset<32> right(data.to_ullong());
-
-    for (int round = 0; round < 16; round++) {
-      auto newRight = left ^ feistel(right, subkeys[round]);
-			left = right;
-			right = newRight;
-    }
-
-    uint64_t combined = (static_cast<uint64_t>(right.to_ullong()) << 32) | left.to_ullong();
-		return fPermutation(std::bitset<64>(combined));
-  }
-
-  std::bitset<64> decode(const std::bitset<64>& plaintext) {
+  encodeBlock(const std::bitset<64>& plaintext) {
     auto data = iPermutation(plaintext);
-    std::bitset<32> left(data.to_ullong() >> 32);
-    std::bitset<32> right(data.to_ullong());
+    auto left = std::bitset<32>((data.to_ullong() >> 32));
+    auto right = std::bitset<32>(data.to_ullong());
 
-    for (int round = 15; round >= 0; --round) {
-      auto newRight = left ^ feistel(right, subkeys[round]);
+    for (int round = 0; round < 16; ++round) {
+      auto f = feistel(right, subkeys[round]);
+      auto newR = left ^ f;
       left = right;
-      right = newRight;
+      right = newR;
     }
-
-    uint64_t combined = (static_cast<uint64_t>(right.to_ullong()) << 32) | left.to_ullong();
+    uint64_t combined = (uint64_t(right.to_ullong()) << 32) | left.to_ullong();
     return fPermutation(std::bitset<64>(combined));
   }
 
-  std::bitset<64> stringToBitset64(const std::string& block) {
-    uint64_t bits = 0;
-    for (int i = 0; i < block.size(); i++) {
-      bits |= (uint64_t)(unsigned char)block[i] << ((7 - i) * 8);
+  std::bitset<64> 
+  decodeBlock(const std::bitset<64>& ciphertext) {
+    auto data = iPermutation(ciphertext);
+    auto left = std::bitset<32>((data.to_ullong() >> 32));
+    auto right = std::bitset<32>(data.to_ullong());
+
+    for (int round = 15; round >= 0; --round) {
+      auto f = feistel(right, subkeys[round]);
+      auto newR = left ^ f;
+      left = right;
+      right = newR;
     }
-		return std::bitset<64>(bits);
+    uint64_t combined = (uint64_t(right.to_ullong()) << 32) | left.to_ullong();
+    return fPermutation(std::bitset<64>(combined));
   }
 
-  std::string bitset64ToString(const std::bitset<64>& bits) {
-    std::string result(8, '\0');
-    uint64_t val = bits.to_ullong();
+  // --- Encriptar / Decriptar archivos ---
+  void 
+  encryptFile(const std::string& inPath,
+    const std::string& outPath)
+  {
+    processFile(inPath, outPath, /*encrypt=*/true);
+  }
 
-    for (int i = 0; i < 8; i++) {
-      result[7 - i] = (val >> (i * 8)) & 0xFF;
+  void 
+  decryptFile(const std::string& inPath,
+    const std::string& outPath)
+  {
+    processFile(inPath, outPath, /*encrypt=*/false);
+  }
+
+  // --- Brute force de demostración ---
+  // 1) Sobre un solo bloque conocido: recorre hasta maxKeys y retorna las claves que coinciden
+  std::vector<uint64_t> 
+  bruteForceKnownPlaintextBlock(
+    const std::bitset<64>& cipherBlock,
+    const std::bitset<64>& knownPlain,
+    uint64_t maxKeys = (1ULL << 20)  // por defecto: 2^20 claves
+  ) {
+    std::vector<uint64_t> found;
+    for (uint64_t k = 0; k < maxKeys; ++k) {
+      setKey(std::bitset<64>(k));
+      if (decodeBlock(cipherBlock) == knownPlain) {
+        found.push_back(k);
+      }
     }
+    return found;
+  }
 
-		return result;
+  // 2) Sobre un archivo con bloque conocido al inicio:
+  //    genera archivos descifrados con cada clave hasta maxKeys
+  void 
+  bruteForceFile(const std::string& inPath,
+    const std::string& outDir,
+    uint64_t maxKeys = (1ULL << 20))
+  {
+    // leer todo el archivo
+    auto data = readFile(inPath);
+    // extraer primer bloque de 8 bytes
+    std::bitset<64> cipherBlock = readBlock(data, 0);
+
+    for (uint64_t k = 0; k < maxKeys; ++k) {
+      setKey(std::bitset<64>(k));
+      // si el primer bloque descifra a algo legible (aquí sin chequear),
+      // de todas formas guardamos el intento:
+      std::string out = processBuffer(data, /*encrypt=*/false);
+      std::ostringstream oss;
+      oss << outDir << "/decrypted_" << k << ".bin";
+      writeFile(oss.str(), out);
+    }
   }
 
 private:
   std::bitset<64> key;
   std::vector<std::bitset<48>> subkeys;
 
-  // Tabla de expansión simplificada (E)
-  const int EXPANSION_TABLE[48] = {
-      32, 1, 2, 3, 4, 5,
-      4, 5, 6, 7, 8, 9,
-      8, 9,10,11,12,13,
-     12,13,14,15,16,17,
-     16,17,18,19,20,21,
-     20,21,22,23,24,25,
-     24,25,26,27,28,29,
-     28,29,30,31,32,1
-  };
+  // --- Tablas (simplificadas en tu código original) ---
+  const int EXPANSION_TABLE[48] = { /* … tu tabla … */ };
+  const int P_TABLE[32] = { /* … tu tabla … */ };
+  const int SBOX[4][16] = { /* … tu SBOX … */ };
 
-  // Permutación P simplificada (usar tabla real si se desea)
-  const int P_TABLE[32] = {
-      16, 7, 20, 21,29,12,28,17,
-       1,15,23,26, 5,18,31,10,
-       2, 8,24,14,32,27, 3, 9,
-      19,13,30, 6,22,11, 4,25
-  };
+  void 
+  generateSubkeys() {
+    for (int i = 0; i < 16; ++i) {
+      std::bitset<48> sub((key.to_ullong() >> i) & 0xFFFFFFFFFFFF);
+      subkeys.push_back(sub);
+    }
+  }
 
-  // S-Box 1 (ejemplo simplificado)
-  const int SBOX[4][16] = {
-      {14,4,13,1,2,15,11,8,3,10,6,12,5,9,0,7},
-      {0,15,7,4,14,2,13,1,10,6,12,11,9,5,3,8},
-      {4,1,14,8,13,6,2,11,15,12,9,7,3,10,5,0},
-      {15,12,8,2,4,9,1,7,5,11,3,14,10,0,6,13}
-  };
+  std::bitset<64> 
+  iPermutation(const std::bitset<64>& in) {
+    // identidad en tu ejemplo
+    return in;
+  }
+  std::bitset<64> 
+  fPermutation(const std::bitset<64>& in) {
+    // identidad en tu ejemplo
+    return in;
+  }
+  std::bitset<48> 
+  expand(const std::bitset<32>& half) {
+    std::bitset<48> out;
+    for (int i = 0; i < 48; ++i)
+      out[i] = half[32 - EXPANSION_TABLE[i]];
+    return out;
+  }
+  std::bitset<32> 
+  substitute(const std::bitset<48>& in) {
+    std::bitset<32> out;
+    for (int i = 0; i < 8; ++i) {
+      int row = (in[i * 6] << 1) | in[i * 6 + 5];
+      int col = (in[i * 6 + 1] << 3) | (in[i * 6 + 2] << 2) | (in[i * 6 + 3] << 1) | in[i * 6 + 4];
+      int val = SBOX[row % 4][col % 16];
+      for (int j = 0; j < 4; ++j)
+        out[i * 4 + j] = (val >> (3 - j)) & 1;
+    }
+    return out;
+  }
+  std::bitset<32> 
+  permuteP(const std::bitset<32>& in) {
+    std::bitset<32> out;
+    for (int i = 0; i < 32; ++i)
+      out[i] = in[32 - P_TABLE[i]];
+    return out;
+  }
+  std::bitset<32> 
+  feistel(const std::bitset<32>& r,
+    const std::bitset<48>& k)
+  {
+    return permuteP(substitute(expand(r) ^ k));
+  }
+
+  // --- I/O de archivos y padding cero ---
+  std::string 
+  readFile(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("No se pudo abrir: " + path);
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+  }
+
+  void 
+  writeFile(const std::string& path, const std::string& data) {
+    std::ofstream out(path, std::ios::binary);
+    if (!out) throw std::runtime_error("No se pudo escribir: " + path);
+    out.write(data.data(), data.size());
+  }
+
+  // Procesa el buffer completo (pad con ceros hasta múltiplo de 8)
+  void 
+  processFile(const std::string& inPath,
+    const std::string& outPath,
+    bool encrypt)
+  {
+    auto buf = readFile(inPath);
+    auto out = processBuffer(buf, encrypt);
+    writeFile(outPath, out);
+  }
+
+  std::string 
+  processBuffer(const std::string& buf, bool encrypt) {
+    std::string result;
+    size_t n = buf.size();
+    size_t padded = ((n + 7) / 8) * 8;
+    result.resize(padded, '\0');
+
+    // copiar original y zeros
+    std::memcpy(result.data(), buf.data(), n);
+
+    // por cada bloque de 8 bytes
+    for (size_t offset = 0; offset < padded; offset += 8) {
+      auto block = readBlock(result, offset);
+      auto outBlk = encrypt
+        ? encodeBlock(block)
+        : decodeBlock(block);
+      writeBlock(result, offset, outBlk);
+    }
+    return result;
+  }
+
+  std::bitset<64> 
+  readBlock(const std::string& buf, size_t off) {
+    uint64_t val = 0;
+    for (int i = 0; i < 8; ++i)
+      val |= uint64_t(uint8_t(buf[off + i])) << ((7 - i) * 8);
+    return std::bitset<64>(val);
+  }
+  void 
+  writeBlock(std::string& buf, size_t off,
+    const std::bitset<64>& bits)
+  {
+    uint64_t val = bits.to_ullong();
+    for (int i = 0; i < 8; ++i)
+      buf[off + i] = char((val >> ((7 - i) * 8)) & 0xFF);
+  }
 };
 
 

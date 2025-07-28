@@ -8,7 +8,7 @@ public:
 	~CesarEncryption() = default;
 
 	std::string
-		encode(const std::string& texto, int desplazamiento) {
+	encode(const std::string& texto, int desplazamiento) {
 		std::string result = "";
 
 		for (char c : texto) {
@@ -30,12 +30,12 @@ public:
 	}
 
 	std::string
-		decode(const std::string& texto, int desplazamiento) {
+	decode(const std::string& texto, int desplazamiento) {
 		return encode(texto, 26 - (desplazamiento % 26));
 	}
 
 	void
-		bruteForceAttack(const std::string& texto) {
+	bruteForceAttack(const std::string& texto) {
 		std::cout << "\nIntentos de descifrado por fuerza bruta:\n";
 		for (int clave = 0; clave < 26; clave++) {
 			std::string intento = encode(texto, 26 - clave);
@@ -97,6 +97,54 @@ public:
 		return mejorClave;
 	}
 
+	void 
+	encryptFile(const std::string& inputPath,
+							const std::string& outputPath,
+							int desplazamiento)	{
+		std::string contenido = readFile(inputPath);
+		std::string cifrado = encode(contenido, desplazamiento);
+		writeFile(outputPath, cifrado);
+	}
+
+	void 
+	decryptFile(const std::string& inputPath,
+							const std::string& outputPath,
+							int desplazamiento) {
+		std::string contenido = readFile(inputPath);
+		std::string claro = decode(contenido, desplazamiento);
+		writeFile(outputPath, claro);
+	}
+
+	/// Genera N=26 archivos con nombre base + clave, por ejemplo: "salida_0.txt", "salida_1.txt", ...
+	void 
+	bruteForceFile(const std::string& inputPath,
+		const std::string& outputDir,
+		const std::string& baseName) {
+		std::string contenido = readFile(inputPath);
+		for (int clave = 0; clave < 26; clave++) {
+			std::string descifrado = encode(contenido, 26 - clave);
+			std::ostringstream filename;
+			filename << outputDir << "/" << baseName << "_" << clave << ".txt";
+			writeFile(filename.str(), descifrado);
+		}
+	}
+
+	private:
+		std::string 
+		readFile(const std::string& path) {
+			std::ifstream in(path, std::ios::in | std::ios::binary);
+			if (!in) throw std::runtime_error("No se pudo abrir para lectura: " + path);
+			std::ostringstream ss;
+			ss << in.rdbuf();
+			return ss.str();
+		}
+
+		void 
+		writeFile(const std::string& path, const std::string& data) {
+			std::ofstream out(path, std::ios::out | std::ios::binary);
+			if (!out) throw std::runtime_error("No se pudo abrir para escritura: " + path);
+			out << data;
+		}
 private:
 
 };

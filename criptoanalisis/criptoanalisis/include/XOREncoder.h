@@ -1,117 +1,142 @@
 #pragma once
 #include "Prerequisites.h"
 
-class 
-XOREncoder {
+class XOREncoder {
 public:
-	XOREncoder() = default;
-	~XOREncoder() = default;
-	
-	// Encodes the input string using XOR with the provided key. 
-	// Input: The string to be encoded. -> Hola Mundo
-	// Key: The key to be used for encoding. -> clave
-	std::string 
-	encode(const std::string& input, const std::string& key) {
-		std::string output = input;
-		for (int i = 0; i < input.size(); i++) {
-			output[i] = input[i] ^ key[i % key.size()];			
-		}
-		return output;
-	}
+  XOREncoder() = default;
+  ~XOREncoder() = default;
 
-	// Transform text to hex representation.
-	std::vector<unsigned char> 
-		HexToBytes(const std::string &input) {
-		std::vector<unsigned char> bytes;
-		std::istringstream iss(input);
-		std::string hexValue;
+  // --- Texto en memoria ---
+  std::string encode(const std::string& input, const std::string& key) const {
+    std::string output = input;
+    for (size_t i = 0; i < input.size(); ++i) {
+      output[i] = input[i] ^ key[i % key.size()];
+    }
+    return output;
+  }
 
-		while (iss >> hexValue)	{
-			if (hexValue.size() == 1) {
-				hexValue = "0" + hexValue;
-			}
-			unsigned int byte;
-			std::stringstream ss;
-			ss << std::hex << hexValue;
-			ss >> byte;
-			bytes.push_back(static_cast<unsigned char>(byte));
-		}
-		return bytes;
-	}
+  // --- I/O de archivos ---
+  void encryptFile(const std::string& inPath,
+    const std::string& outPath,
+    const std::string& key) const
+  {
+    auto buf = readFile(inPath);
+    std::string plain(reinterpret_cast<const char*>(buf.data()), buf.size());
+    std::string cipher = encode(plain, key);
+    writeFile(outPath,
+      std::vector<unsigned char>(cipher.begin(), cipher.end()));
+  }
 
-	void
-	printHex(const std::string& input) {
-		for (unsigned char c : input)	{
-			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)c << " ";
-		}
-	}
+  // Para XOR, encriptar y desencriptar es la misma operación
+  void decryptFile(const std::string& inPath,
+    const std::string& outPath,
+    const std::string& key) const
+  {
+    encryptFile(inPath, outPath, key);
+  }
 
-	bool isValidText(const std::string& data) {
-		return std::all_of(data.begin(), data.end(), [](unsigned char c) {
-			return std::isprint(c) || std::isspace(c) || c == '\n' || c == ' ';
-			});
-	}
+  // --- Fuerza bruta 1 byte sobre archivo ---
+  // Genera un archivo descifrado por cada posible valor de byte [0..255]
+  void bruteForce1ByteFile(const std::string& inPath,
+    const std::string& outDir) const
+  {
+    auto buf = readFile(inPath);
+    fs::create_directories(outDir);
+    for (int k = 0; k < 256; ++k) {
+      std::string key(1, static_cast<char>(k));
+      std::string decoded;
+      decoded.reserve(buf.size());
+      for (auto b : buf) decoded += static_cast<char>(b ^ k);
 
-	void
-	bruteForce_1Byte(const std::vector<unsigned char>& cifrado) {
-		for (int clave = 0; clave < 256; ++clave) {
-			std::string result;
+      // Solo guardamos si el texto resultante parece legible
+      if (isValidText(decoded)) {
+        std::ostringstream fname;
+        fname << outDir << "/xor1b_0x"
+          << std::hex << std::setw(2) << std::setfill('0') << k
+          << ".bin";
+        writeFile(fname.str(),
+          std::vector<unsigned char>(decoded.begin(), decoded.end()));
+        std::cout << "Guardado: " << fname.str() << "\n";
+      }
+    }
+  }
 
-			for (unsigned char c : cifrado) {
-				result += static_cast<unsigned char>( c ^ clave);
-			}
+  // --- Fuerza bruta 2 bytes sobre archivo ---
+  void bruteForce2ByteFile(const std::string& inPath,
+    const std::string& outDir) const
+  {
+    auto buf = readFile(inPath);
+    fs::create_directories(outDir);
+    for (int b1 = 0; b1 < 256; ++b1) {
+      for (int b2 = 0; b2 < 256; ++b2) {
+        std::string decoded;
+        decoded.reserve(buf.size());
+        for (size_t i = 0; i < buf.size(); ++i) {
+          int keyByte = (i % 2 == 0 ? b1 : b2);
+          decoded += static_cast<char>(buf[i] ^ keyByte);
+        }
+        if (isValidText(decoded)) {
+          std::ostringstream fname;
+          fname << outDir << "/xor2b_0x"
+            << std::hex << std::setw(2) << std::setfill('0') << b1
+            << "_0x" << std::setw(2) << b2 << ".bin";
+          writeFile(fname.str(),
+            std::vector<unsigned char>(decoded.begin(), decoded.end()));
+          std::cout << "Guardado: " << fname.str() << "\n";
+        }
+      }
+    }
+  }
 
-			if (isValidText(result)) {
-				std::cout << "=============================\n";
-				std::cout << "Clave 1 byte  : '" << static_cast<char>(clave)
-					<< "' (0x" << std::hex << std::setw(2) << std::setfill('0') << clave << ")\n";
-				std::cout << "Texto posible : " << result << "\n";
-			}
-		}
-	}
+  // --- Fuerza bruta con diccionario sobre archivo ---
+  void bruteForceDictionaryFile(const std::string& inPath,
+    const std::string& outDir) const
+  {
+    static const std::vector<std::string> comunes = {
+        "clave","admin","1234","root","test","abc","hola",
+        "user","pass","12345","0000","password","default"
+    };
+    auto buf = readFile(inPath);
+    fs::create_directories(outDir);
+    for (auto& key : comunes) {
+      std::string decoded;
+      decoded.reserve(buf.size());
+      for (size_t i = 0; i < buf.size(); ++i) {
+        decoded += static_cast<char>(buf[i] ^ key[i % key.size()]);
+      }
+      if (isValidText(decoded)) {
+        std::ostringstream fname;
+        fname << outDir << "/xor_dict_" << key << ".bin";
+        writeFile(fname.str(),
+          std::vector<unsigned char>(decoded.begin(), decoded.end()));
+        std::cout << "Guardado: " << fname.str()
+          << "  (key='" << key << "')\n";
+      }
+    }
+  }
 
-	void
-	bruteForce_2Byte(const std::vector<unsigned char>& cifrado) {
-		for (int b1 = 0; b1 < 256; ++b1) {
-			for (int b2 = 0; b2 < 256; ++b2){
-				std::string result;
-				unsigned char key[2] = {static_cast<unsigned char>(b1), static_cast<unsigned char>(b2)};
-
-				for (int i = 0; i < cifrado.size(); i++) {
-					result += cifrado[i] ^ key[i % 2];
-				}
-
-				if (isValidText(result)) {
-					std::cout << "=============================\n";
-					std::cout << "Clave 2 bytes : '" << static_cast<char>(b1) << static_cast<char>(b2)
-						<< "' (0x" << std::hex << std::setw(2) << std::setfill('0') << b1
-						<< " 0x" << std::setw(2) << std::setfill('0') << b2 << ")\n";
-					std::cout << "Texto posible : " << result << "\n";
-				}
-
-			}
-		}
-		
-	}
-
-	void bruteForceByDictionary(const std::vector<unsigned char>& cifrado) {
-		std::vector<std::string> clavesComunes = {
-			"clave", "admin", "1234", "root", "test", "abc", "hola", "user",
-			"pass", "12345", "0000", "password", "default"
-		};
-
-		for (const auto& clave : clavesComunes) {
-			std::string result;
-			for (int i = 0; i < cifrado.size(); i++) {
-				result += static_cast<unsigned char>( cifrado[i] ^ clave[i % clave.size()]);
-			}
-			if (isValidText(result)) {
-				std::cout << "=============================\n";
-				std::cout << "Clave de diccionario: '" << clave << "'\n";
-				std::cout << "Texto posible : " << result << "\n";
-			}
-		}
-	}
 private:
+  // --- Lectura / escritura binaria ---
+  static std::vector<unsigned char> readFile(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("No se pudo abrir: " + path);
+    std::vector<unsigned char> buf((std::istreambuf_iterator<char>(in)),
+      std::istreambuf_iterator<char>());
+    return buf;
+  }
 
+  static void writeFile(const std::string& path,
+    const std::vector<unsigned char>& buf)
+  {
+    std::ofstream out(path, std::ios::binary);
+    if (!out) throw std::runtime_error("No se pudo escribir: " + path);
+    out.write(reinterpret_cast<const char*>(buf.data()), buf.size());
+  }
+
+  // --- Valida texto legible ASCII ---
+  bool isValidText(const std::string& data) const {
+    return std::all_of(data.begin(), data.end(), [](unsigned char c) {
+      return std::isprint(c) || std::isspace(c) || c == '\n' || c == '\r';
+      });
+  }
 };
